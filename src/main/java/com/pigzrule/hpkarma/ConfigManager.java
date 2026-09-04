@@ -77,6 +77,9 @@ public class ConfigManager {
             if (values.containsKey("hudNotification")) {
                 ChatHandler.hudNotification = Boolean.parseBoolean(values.get("hudNotification"));
             }
+            if (values.containsKey("soundNotification")) {
+                ChatHandler.soundNotification = Boolean.parseBoolean(values.get("soundNotification"));
+            }
             if (values.containsKey("waveCooldownMs")) {
                 ChatHandler.waveCooldownMs = Math.max(10000, Integer.parseInt(values.get("waveCooldownMs")));
             }
@@ -122,6 +125,7 @@ public class ConfigManager {
                 writer.write("  \"randomizePhrases\": " + ChatHandler.randomizePhrases + ",\n");
                 writer.write("  \"pauseWhenUnfocused\": " + ChatHandler.pauseWhenUnfocused + ",\n");
                 writer.write("  \"hudNotification\": " + ChatHandler.hudNotification + ",\n");
+                writer.write("  \"soundNotification\": " + ChatHandler.soundNotification + ",\n");
                 writer.write("  \"waveCooldownMs\": " + ChatHandler.waveCooldownMs + ",\n");
                 writer.write("  \"globalCooldownMs\": " + ChatHandler.globalCooldownMs + ",\n");
                 writer.write("  \"triggerCooldownMs\": " + ChatHandler.triggerCooldownMs + ",\n");
