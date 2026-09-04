@@ -20,6 +20,9 @@ public class HPKarmaMod implements ClientModInitializer {
     public void onInitializeClient() {
         LOGGER.info("[HPKarma] Initializing HPKarma for Hallow Prison (Multi-Type Stacking & Wave Protection)...");
 
+        // Load persistent configuration from config/hp-karma.json
+        ConfigManager.load();
+
         // 1. Game / System Message Listener
         ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
             try {
@@ -73,6 +76,7 @@ public class HPKarmaMod implements ClientModInitializer {
                 .then(ClientCommandManager.literal("toggle")
                     .executes(context -> {
                         ChatHandler.enabled = !ChatHandler.enabled;
+                        ConfigManager.save();
                         context.getSource().sendFeedback(net.minecraft.class_2561.method_30163(
                             PREFIX + "§7Master switch: " + (ChatHandler.enabled ? "§a✔" : "§c✖")
                         ));
@@ -82,6 +86,7 @@ public class HPKarmaMod implements ClientModInitializer {
                 .then(ClientCommandManager.literal("gg")
                     .executes(context -> {
                         ChatHandler.ggEnabled = !ChatHandler.ggEnabled;
+                        ConfigManager.save();
                         context.getSource().sendFeedback(net.minecraft.class_2561.method_30163(
                             PREFIX + "§7Auto-GG: " + (ChatHandler.ggEnabled ? "§a✔" : "§c✖")
                         ));
@@ -91,6 +96,7 @@ public class HPKarmaMod implements ClientModInitializer {
                 .then(ClientCommandManager.literal("welcome")
                     .executes(context -> {
                         ChatHandler.welcomeEnabled = !ChatHandler.welcomeEnabled;
+                        ConfigManager.save();
                         context.getSource().sendFeedback(net.minecraft.class_2561.method_30163(
                             PREFIX + "§7Auto-Welcome: " + (ChatHandler.welcomeEnabled ? "§a✔" : "§c✖")
                         ));
@@ -114,6 +120,7 @@ public class HPKarmaMod implements ClientModInitializer {
                         .executes(context -> {
                             int sec = IntegerArgumentType.getInteger(context, "seconds");
                             ChatHandler.waveCooldownMs = sec * 1000;
+                            ConfigManager.save();
                             context.getSource().sendFeedback(net.minecraft.class_2561.method_30163(
                                 PREFIX + "§7Wave lockout duration set to §e" + sec + "s"
                             ));
@@ -133,12 +140,72 @@ public class HPKarmaMod implements ClientModInitializer {
                             int sec = IntegerArgumentType.getInteger(context, "seconds");
                             ChatHandler.triggerCooldownMs = sec * 1000;
                             ChatHandler.globalCooldownMs = Math.max(2500, (sec - 2) * 1000);
+                            ConfigManager.save();
                             context.getSource().sendFeedback(net.minecraft.class_2561.method_30163(
                                 PREFIX + "§7Safety throttle set to §e" + sec + "s"
                             ));
                             return 1;
                         })
                     )
+                )
+                .then(ClientCommandManager.literal("serverlock")
+                    .executes(context -> {
+                        ChatHandler.serverLock = !ChatHandler.serverLock;
+                        ConfigManager.save();
+                        context.getSource().sendFeedback(net.minecraft.class_2561.method_30163(
+                            PREFIX + "§7Server Lock (Hallow Prison only): " + (ChatHandler.serverLock ? "§a✔" : "§c✖")
+                        ));
+                        return 1;
+                    })
+                )
+                .then(ClientCommandManager.literal("randomize")
+                    .executes(context -> {
+                        ChatHandler.randomizePhrases = !ChatHandler.randomizePhrases;
+                        ConfigManager.save();
+                        context.getSource().sendFeedback(net.minecraft.class_2561.method_30163(
+                            PREFIX + "§7Phrase Randomization: " + (ChatHandler.randomizePhrases ? "§a✔" : "§c✖")
+                        ));
+                        return 1;
+                    })
+                )
+                .then(ClientCommandManager.literal("rand")
+                    .executes(context -> {
+                        ChatHandler.randomizePhrases = !ChatHandler.randomizePhrases;
+                        ConfigManager.save();
+                        context.getSource().sendFeedback(net.minecraft.class_2561.method_30163(
+                            PREFIX + "§7Phrase Randomization: " + (ChatHandler.randomizePhrases ? "§a✔" : "§c✖")
+                        ));
+                        return 1;
+                    })
+                )
+                .then(ClientCommandManager.literal("hud")
+                    .executes(context -> {
+                        ChatHandler.hudNotification = !ChatHandler.hudNotification;
+                        ConfigManager.save();
+                        context.getSource().sendFeedback(net.minecraft.class_2561.method_30163(
+                            PREFIX + "§7Actionbar HUD feedback: " + (ChatHandler.hudNotification ? "§a✔" : "§c✖")
+                        ));
+                        return 1;
+                    })
+                )
+                .then(ClientCommandManager.literal("focus")
+                    .executes(context -> {
+                        ChatHandler.pauseWhenUnfocused = !ChatHandler.pauseWhenUnfocused;
+                        ConfigManager.save();
+                        context.getSource().sendFeedback(net.minecraft.class_2561.method_30163(
+                            PREFIX + "§7Pause when tabbed out: " + (ChatHandler.pauseWhenUnfocused ? "§a✔" : "§c✖")
+                        ));
+                        return 1;
+                    })
+                )
+                .then(ClientCommandManager.literal("stats")
+                    .executes(context -> {
+                        int total = ChatHandler.SESSION_GGS.get() + ChatHandler.SESSION_WELCOMES.get();
+                        context.getSource().sendFeedback(net.minecraft.class_2561.method_30163(
+                            PREFIX + "§7Session: §e" + ChatHandler.SESSION_GGS.get() + " §7GGs, §e" + ChatHandler.SESSION_WELCOMES.get() + " §7Welcomes §8(~§a" + (total * 10) + " §7Karma§8)"
+                        ));
+                        return 1;
+                    })
                 )
         );
     }
@@ -264,11 +331,44 @@ public class HPKarmaMod implements ClientModInitializer {
      */
     public static String centerText(net.minecraft.class_327 tr, int chatWidth, String text) {
         if (tr == null || chatWidth <= 30) return " " + text;
-        String clean = stripColor(text);
-        int textWidth = tr.method_1727(clean);
+        int textWidth = tr.method_1727(text);
         int leftMargin = (chatWidth - textWidth) / 2;
         if (leftMargin <= 0) return text;
         return getExactSpacing(tr, leftMargin) + text;
+    }
+
+    public static net.minecraft.class_5250 makeButton(String text, String command, String hoverTooltip) {
+        net.minecraft.class_5250 component = net.minecraft.class_2561.method_43470(text);
+        net.minecraft.class_2583 style = net.minecraft.class_2583.field_24360
+            .method_10958(new net.minecraft.class_2558.class_10609(command))
+            .method_10949(new net.minecraft.class_2568.class_10613(net.minecraft.class_2561.method_43470(hoverTooltip)));
+        return component.method_10862(style);
+    }
+
+    public static net.minecraft.class_5250 makeSuggestButton(String text, String command, String hoverTooltip) {
+        net.minecraft.class_5250 component = net.minecraft.class_2561.method_43470(text);
+        net.minecraft.class_2583 style = net.minecraft.class_2583.field_24360
+            .method_10958(new net.minecraft.class_2558.class_10610(command))
+            .method_10949(new net.minecraft.class_2568.class_10613(net.minecraft.class_2561.method_43470(hoverTooltip)));
+        return component.method_10862(style);
+    }
+
+    private static class StatusRow {
+        final String label;
+        final String value;
+        final String comment;
+        final String command;
+        final String tooltip;
+        final boolean isSuggest;
+
+        StatusRow(String label, String value, String comment, String command, String tooltip, boolean isSuggest) {
+            this.label = label;
+            this.value = value;
+            this.comment = comment;
+            this.command = command;
+            this.tooltip = tooltip;
+            this.isSuggest = isSuggest;
+        }
     }
 
     private void sendHelp(FabricClientCommandSource source) {
@@ -286,9 +386,14 @@ public class HPKarmaMod implements ClientModInitializer {
             { " §e/hpk toggle", "Toggle responder on/off" },
             { " §e/hpk gg", "Toggle Rebirth & Karma GG" },
             { " §e/hpk welcome", "Toggle welcome for new joins" },
+            { " §e/hpk serverlock", "Toggle Hallow Prison only lock" },
+            { " §e/hpk randomize", "Toggle phrase variations" },
+            { " §e/hpk hud", "Toggle action-bar toast" },
+            { " §e/hpk focus", "Toggle pause when tabbed out" },
             { " §e/hpk wavecooldown <sec>", "Wave lockout (15-180s)" },
             { " §e/hpk cooldown <sec>", "Safety spacing (4-60s)" },
-            { " §e/hpk status", "Open status overview" }
+            { " §e/hpk stats", "Show session stats" },
+            { " §e/hpk status", "Open interactive status overview" }
         };
 
         int maxCmdWidth = 0;
@@ -298,7 +403,7 @@ public class HPKarmaMod implements ClientModInitializer {
                 if (w > maxCmdWidth) maxCmdWidth = w;
             }
         } else {
-            maxCmdWidth = 125;
+            maxCmdWidth = 145;
         }
 
         // Single-pixel column target anchor for the '»' symbol
@@ -307,10 +412,9 @@ public class HPKarmaMod implements ClientModInitializer {
         for (String[] c : cmds) {
             int curCmdWidth = (tr != null) ? tr.method_1727(stripColor(c[0])) : 90;
             int needed = targetCmd - curCmdWidth;
-            StringBuilder sb = new StringBuilder(c[0]);
-            sb.append(getExactSpacing(tr, needed));
-            sb.append("§8» §7").append(c[1]);
-            source.sendFeedback(net.minecraft.class_2561.method_30163(sb.toString()));
+            net.minecraft.class_5250 line = makeSuggestButton(c[0], c[0].trim() + " ", "§eClick to paste command into chat");
+            line.method_10852(net.minecraft.class_2561.method_30163(getExactSpacing(tr, needed) + "§8» §7" + c[1]));
+            source.sendFeedback(line);
         }
 
         source.sendFeedback(net.minecraft.class_2561.method_30163(""));
@@ -329,26 +433,30 @@ public class HPKarmaMod implements ClientModInitializer {
         source.sendFeedback(net.minecraft.class_2561.method_30163(title));
         source.sendFeedback(net.minecraft.class_2561.method_30163(""));
 
-        String[][] rows = new String[][] {
-            { " §6\u270F §7Master Switch:",     ChatHandler.enabled ? "§a✔" : "§c✖", "" },
-            { " §6\u270F §7Rebirth GG:",        ChatHandler.ggEnabled ? "§a✔" : "§c✖", "§8(§bCyan§8)" },
-            { " §6\u270F §7Milestone GG:",      ChatHandler.ggEnabled ? "§a✔" : "§c✖", "§8(§6Orange§8)" },
-            { " §6\u270F §7New Player Welcome:", ChatHandler.welcomeEnabled ? "§a✔" : "§c✖", "§8(§aGreen§8)" },
-            { " §6\u270F §7Wave Lockout:",      "§e" + (ChatHandler.waveCooldownMs / 1000) + "s", "§8(§7Lockout§8)" },
-            { " §6\u270F §7Safety Throttle:",   "§e" + (ChatHandler.globalCooldownMs / 1000) + "s", "§8(§7Throttle§8)" }
+        StatusRow[] rows = new StatusRow[] {
+            new StatusRow(" §6\u270F §7Master Switch:",        ChatHandler.enabled ? "§a✔" : "§c✖", "", "/hpk toggle", "§eClick to toggle Master Switch", false),
+            new StatusRow(" §6\u270F §7Rebirth GG:",           ChatHandler.ggEnabled ? "§a✔" : "§c✖", "§8(§bCyan§8)", "/hpk gg", "§eClick to toggle Auto-GG", false),
+            new StatusRow(" §6\u270F §7Milestone GG:",         ChatHandler.ggEnabled ? "§a✔" : "§c✖", "§8(§6Orange§8)", "/hpk gg", "§eClick to toggle Auto-GG", false),
+            new StatusRow(" §6\u270F §7New Player Welcome:",    ChatHandler.welcomeEnabled ? "§a✔" : "§c✖", "§8(§aGreen§8)", "/hpk welcome", "§eClick to toggle Auto-Welcome", false),
+            new StatusRow(" §6\u270F §7Hallow Prison Lock:",   ChatHandler.serverLock ? "§a✔" : "§c✖", "§8(§7Lock to HP§8)", "/hpk serverlock", "§eClick to toggle server lock", false),
+            new StatusRow(" §6\u270F §7Phrase Variation:",     ChatHandler.randomizePhrases ? "§a✔" : "§c✖", "§8(§7Anti-detection§8)", "/hpk randomize", "§eClick to toggle phrase randomization", false),
+            new StatusRow(" §6\u270F §7HUD Notification:",     ChatHandler.hudNotification ? "§a✔" : "§c✖", "§8(§7Actionbar§8)", "/hpk hud", "§eClick to toggle HUD notices", false),
+            new StatusRow(" §6\u270F §7Pause Tabbed Out:",     ChatHandler.pauseWhenUnfocused ? "§a✔" : "§c✖", "§8(§7Focus check§8)", "/hpk focus", "§eClick to toggle pause when tabbed out", false),
+            new StatusRow(" §6\u270F §7Wave Lockout:",         "§e" + (ChatHandler.waveCooldownMs / 1000) + "s", "§8(§7Lockout§8)", "/hpk wavecooldown ", "§eClick to set wave lockout", true),
+            new StatusRow(" §6\u270F §7Safety Throttle:",      "§e" + (ChatHandler.globalCooldownMs / 1000) + "s", "§8(§7Throttle§8)", "/hpk cooldown ", "§eClick to set safety throttle", true)
         };
 
         int maxLabelWidth = 0;
         int maxValueWidth = 0;
         if (tr != null) {
-            for (String[] r : rows) {
-                int lw = tr.method_1727(stripColor(r[0]));
+            for (StatusRow r : rows) {
+                int lw = tr.method_1727(stripColor(r.label));
                 if (lw > maxLabelWidth) maxLabelWidth = lw;
-                int vw = tr.method_1727(stripColor(r[1]));
+                int vw = tr.method_1727(stripColor(r.value));
                 if (vw > maxValueWidth) maxValueWidth = vw;
             }
         } else {
-            maxLabelWidth = 125;
+            maxLabelWidth = 135;
             maxValueWidth = 20;
         }
 
@@ -356,26 +464,32 @@ public class HPKarmaMod implements ClientModInitializer {
         int col1Target = maxLabelWidth + 10;
         int col2Target = col1Target + maxValueWidth + 14;
 
-        for (String[] r : rows) {
-            int curLabelWidth = (tr != null) ? tr.method_1727(stripColor(r[0])) : 90;
+        for (StatusRow r : rows) {
+            int curLabelWidth = (tr != null) ? tr.method_1727(stripColor(r.label)) : 90;
             int needed1 = col1Target - curLabelWidth;
 
-            StringBuilder sb = new StringBuilder(r[0]);
-            sb.append(getExactSpacing(tr, needed1));
-            sb.append(r[1]);
+            net.minecraft.class_5250 line = net.minecraft.class_2561.method_43470(r.label + getExactSpacing(tr, needed1));
 
-            if (!r[2].isEmpty()) {
-                int curValueWidth = (tr != null) ? tr.method_1727(stripColor(r[1])) : 15;
+            net.minecraft.class_5250 btn = r.isSuggest ?
+                makeSuggestButton(r.value, r.command, r.tooltip) :
+                makeButton(r.value, r.command, r.tooltip);
+            line.method_10852(btn);
+
+            if (!r.comment.isEmpty()) {
+                int curValueWidth = (tr != null) ? tr.method_1727(stripColor(r.value)) : 15;
                 int currentTotalWidth = col1Target + curValueWidth;
                 int needed2 = col2Target - currentTotalWidth;
-
-                sb.append(getExactSpacing(tr, needed2));
-                sb.append(r[2]);
+                line.method_10852(net.minecraft.class_2561.method_30163(getExactSpacing(tr, needed2) + r.comment));
             }
 
-            source.sendFeedback(net.minecraft.class_2561.method_30163(sb.toString()));
+            source.sendFeedback(line);
         }
 
+        int totalResponses = ChatHandler.SESSION_GGS.get() + ChatHandler.SESSION_WELCOMES.get();
+        source.sendFeedback(net.minecraft.class_2561.method_30163(""));
+        source.sendFeedback(net.minecraft.class_2561.method_30163(
+            " §6⚡ §7Session Stats: §e" + ChatHandler.SESSION_GGS.get() + " §7GGs, §e" + ChatHandler.SESSION_WELCOMES.get() + " §7Welcomes §8(~§a" + (totalResponses * 10) + " §7Karma§8)"
+        ));
         source.sendFeedback(net.minecraft.class_2561.method_30163(divider));
     }
 }

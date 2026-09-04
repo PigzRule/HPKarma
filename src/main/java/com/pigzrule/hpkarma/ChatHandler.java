@@ -37,6 +37,47 @@ public class ChatHandler {
     public static volatile boolean enabled = true;
     public static volatile boolean ggEnabled = true;
     public static volatile boolean welcomeEnabled = true;
+    public static volatile boolean serverLock = true;
+    public static volatile boolean randomizePhrases = true;
+    public static volatile boolean pauseWhenUnfocused = false;
+    public static volatile boolean hudNotification = true;
+
+    // Session stats tracking
+    public static final java.util.concurrent.atomic.AtomicInteger SESSION_GGS = new java.util.concurrent.atomic.AtomicInteger(0);
+    public static final java.util.concurrent.atomic.AtomicInteger SESSION_WELCOMES = new java.util.concurrent.atomic.AtomicInteger(0);
+
+    // Natural phrase pools for anti-detection
+    private static final String[] GG_POOL = {"gg", "GG", "ggs", "Gg", "gg!"};
+    private static final String[] WELCOME_POOL = {"welcome", "Welcome!", "welcome!", "wb", "Welcome"};
+
+    public static String getGgResponse() {
+        if (!randomizePhrases) return "gg";
+        return GG_POOL[RANDOM.nextInt(GG_POOL.length)];
+    }
+
+    public static String getWelcomeResponse() {
+        if (!randomizePhrases) return "welcome";
+        return WELCOME_POOL[RANDOM.nextInt(WELCOME_POOL.length)];
+    }
+
+    /**
+     * Checks whether the client is currently connected to Hallow Prison.
+     */
+    public static boolean isHallowPrisonConnected() {
+        try {
+            net.minecraft.class_310 client = net.minecraft.class_310.method_1551();
+            if (client == null) return false;
+            if (client.method_1496()) return false; // Singleplayer integrated server
+            net.minecraft.class_642 server = client.method_1558();
+            if (server == null) return false;
+            String address = server.field_3761;
+            if (address == null) return false;
+            String lower = address.toLowerCase();
+            return lower.contains("hallowprison.com") || lower.contains("hallowprison");
+        } catch (Throwable t) {
+            return false;
+        }
+    }
 
     // Humanized reaction + typing delays (milliseconds)
     public static volatile int minDelayGg = 1800;
@@ -234,6 +275,21 @@ public class ChatHandler {
         try {
             if (!enabled) return;
 
+            // 0. Server Lock Guard: Only trigger when connected to Hallow Prison
+            if (serverLock && !isHallowPrisonConnected()) {
+                return;
+            }
+
+            // 0b. Focus / AFK Guard: Suppress when window is unfocused / tabbed out
+            if (pauseWhenUnfocused) {
+                try {
+                    net.minecraft.class_310 clientTest = net.minecraft.class_310.method_1551();
+                    if (clientTest != null && !clientTest.method_1569()) {
+                        return;
+                    }
+                } catch (Throwable ignored) {}
+            }
+
             long now = System.currentTimeMillis();
 
             net.minecraft.class_310 client = net.minecraft.class_310.method_1551();
@@ -267,11 +323,20 @@ public class ChatHandler {
                 return;
             }
 
+            // 3. Self-Announcement Guard: If the message mentions our username in an announcement context,
+            // do not auto-respond (prevents "gg"ing your own rebirth or welcoming yourself)
+            if (myName != null && !myName.isEmpty() && lowerFull.contains(myName.toLowerCase())) {
+                if (senderName == null || isOverlay || lowerFull.contains("rebirth") || lowerFull.contains("joined for the first time")) {
+                    LOGGER.debug("[HPKarma] Announcement involves local player (self-event); suppressing auto-response.");
+                    return;
+                }
+            }
+
             if (isOverlay) {
                 LOGGER.info("[HPKarma] Received overlay/actionbar message: {}", fullString);
             }
 
-            // 3. Completely ignore all Store Purchases / TY requests (Production build complies with server anti-farming rules)
+            // 4. Completely ignore all Store Purchases / TY requests (Production build complies with server anti-farming rules)
             if (isStoreMessage(lowerFull) ||
                 lowerFull.contains("say ty in the chat") ||
                 lowerFull.contains("say ty in chat") ||
@@ -281,28 +346,32 @@ public class ChatHandler {
                 return;
             }
 
-            // Scan for triggers
+            // 5. Distinguish genuine server announcements from player chat to prevent bot-baiting
+            boolean isServerAnnouncement = (senderName == null) || isOverlay;
+
             EventCategory detectedGgCategory = null;
             boolean foundWelcome = false;
 
             // Server announcements on Hallow Prison
-            if (lowerFull.contains("rebirth") || lowerFull.contains("rebirthed")) {
-                if (lowerFull.contains("milestone")) {
+            if (isServerAnnouncement) {
+                if (lowerFull.contains("rebirth") || lowerFull.contains("rebirthed")) {
+                    if (lowerFull.contains("milestone")) {
+                        detectedGgCategory = EventCategory.ORANGE_GG;
+                    } else {
+                        detectedGgCategory = EventCategory.CYAN_GG;
+                    }
+                } else if (lowerFull.contains("milestone")) {
                     detectedGgCategory = EventCategory.ORANGE_GG;
-                } else {
+                } else if (lowerFull.contains("say gg in the chat") || lowerFull.contains("say gg in chat") || lowerFull.contains("say gg") || lowerFull.contains("say 'gg'")) {
                     detectedGgCategory = EventCategory.CYAN_GG;
                 }
-            } else if (lowerFull.contains("milestone")) {
-                detectedGgCategory = EventCategory.ORANGE_GG;
-            } else if (lowerFull.contains("say gg in the chat") || lowerFull.contains("say gg in chat") || lowerFull.contains("say gg") || lowerFull.contains("say 'gg'")) {
-                detectedGgCategory = EventCategory.CYAN_GG;
+
+                if (lowerFull.contains("say welcome in the chat") || lowerFull.contains("say welcome in chat") || lowerFull.contains("say welcome") || lowerFull.contains("joined for the first time")) {
+                    foundWelcome = true;
+                }
             }
 
-            if (lowerFull.contains("say welcome in the chat") || lowerFull.contains("say welcome in chat") || lowerFull.contains("say welcome") || lowerFull.contains("joined for the first time")) {
-                foundWelcome = true;
-            }
-
-            // Styled text component traversal: inspects for colored 'gg' or green 'welcome'
+            // 6. Styled text component traversal: inspects for colored 'gg', 'ggs', or green 'welcome'
             if (text != null && (detectedGgCategory == null || !foundWelcome)) {
                 final EventCategory[] compGgCat = new EventCategory[1];
                 final boolean[] compWelcome = new boolean[1];
@@ -311,8 +380,8 @@ public class ChatHandler {
                     if (str != null && !str.isEmpty()) {
                         String sLower = str.toLowerCase();
 
-                        // Check for 'gg' as a whole word with its distinct color category
-                        if (compGgCat[0] == null && containsWord(sLower, "gg")) {
+                        // Check for 'gg' or 'ggs' as a whole word with its distinct color category
+                        if (compGgCat[0] == null && (containsWord(sLower, "gg") || containsWord(sLower, "ggs"))) {
                             compGgCat[0] = categorizeGg(style, str);
                         }
 
@@ -387,25 +456,55 @@ public class ChatHandler {
         long nextSlot = targetTime + 2500 + RANDOM.nextInt(1300);
         NEXT_AVAILABLE_SEND_TIME.set(nextSlot);
 
+        final long triggerTimestamp = now;
+        final Object initialConn;
+        net.minecraft.class_310 clientInstance = net.minecraft.class_310.method_1551();
+        if (clientInstance != null && clientInstance.method_1562() != null) {
+            initialConn = clientInstance.method_1562().method_48296();
+        } else {
+            initialConn = null;
+        }
+
         long delayMs = Math.max(0, targetTime - now);
         LOGGER.info("[HPKarma] Queued {} -> '{}' (Dispatch in {}ms, target: +{}ms)",
                 category, responseText, delayMs, (targetTime - now));
 
         CompletableFuture.delayedExecutor(delayMs, TimeUnit.MILLISECONDS).execute(() -> {
             try {
+                // Drop stale events if queuing or lag exceeded TTL (9.0s)
+                if (System.currentTimeMillis() - triggerTimestamp > 9000) {
+                    LOGGER.debug("[HPKarma] Dropped stale response for {} (TTL 9s exceeded)", category);
+                    return;
+                }
+
                 net.minecraft.class_310 client = net.minecraft.class_310.method_1551();
                 if (client == null) return;
 
                 client.execute(() -> {
                     try {
                         if (!enabled) return;
+                        if (serverLock && !isHallowPrisonConnected()) return;
+                        if (pauseWhenUnfocused && !client.method_1569()) return;
                         if (client.field_1724 == null || client.field_1687 == null) return;
 
                         net.minecraft.class_634 netHandler = client.method_1562();
                         if (netHandler == null) return;
 
                         Object conn = netHandler.method_48296();
+                        // Connection Affinity Check: Drop if connection changed (reconnected or switched servers)
+                        if (initialConn != null && conn != initialConn) {
+                            LOGGER.debug("[HPKarma] Connection changed since event trigger; dropping response.");
+                            return;
+                        }
                         if (!isConnectionOpen(conn)) return;
+
+                        // Select text to send (randomized or default)
+                        String textToSend;
+                        if (category == EventCategory.WELCOME) {
+                            textToSend = getWelcomeResponse();
+                        } else {
+                            textToSend = getGgResponse();
+                        }
 
                         long dispatchNow = System.currentTimeMillis();
                         LAST_ACTUAL_SENT_TIME.set(dispatchNow);
@@ -413,32 +512,49 @@ public class ChatHandler {
                         // Synchronize with NoChatReports
                         try {
                             Class<?> sss = Class.forName("com.aizistral.nochatreports.common.core.ServerSafetyState");
-                            sss.getMethod("setLastMessage", String.class).invoke(null, responseText);
+                            sss.getMethod("setLastMessage", String.class).invoke(null, textToSend);
                         } catch (Throwable ignored) {}
 
-                        // Send through ChatScreen pipeline
+                        // Send through network or ChatScreen pipeline without interrupting open screens
                         boolean sent = false;
-                        try {
-                            net.minecraft.class_408 screen = null;
-                            if (client.field_1755 instanceof net.minecraft.class_408) {
-                                screen = (net.minecraft.class_408) client.field_1755;
-                            } else {
-                                screen = new net.minecraft.class_408("", false);
+                        if (client.field_1755 instanceof net.minecraft.class_408) {
+                            // If player is actively typing in chat, sending via netHandler directly preserves their open screen and draft!
+                            netHandler.method_45729(textToSend);
+                            sent = true;
+                            LOGGER.info("[HPKarma] Sent {} via netHandler (player typing draft preserved): '{}'", category, textToSend);
+                        } else {
+                            try {
+                                net.minecraft.class_408 screen = new net.minecraft.class_408("", false);
                                 net.minecraft.class_1041 win = client.method_22683();
                                 if (win != null) {
                                     screen.method_25423(win.method_4486(), win.method_4502());
                                 }
+                                screen.method_44056(textToSend, false);
+                                sent = true;
+                                LOGGER.info("[HPKarma] Sent {} via ChatScreen pipeline: '{}'", category, textToSend);
+                            } catch (Throwable screenErr) {
+                                LOGGER.warn("[HPKarma] ChatScreen fallback to netHandler", screenErr);
                             }
-                            screen.method_44056(responseText, false);
-                            sent = true;
-                            LOGGER.info("[HPKarma] Sent {} via ChatScreen pipeline: '{}'", category, responseText);
-                        } catch (Throwable screenErr) {
-                            LOGGER.warn("[HPKarma] ChatScreen fallback to netHandler", screenErr);
                         }
 
                         if (!sent) {
-                            netHandler.method_45729(responseText);
-                            LOGGER.info("[HPKarma] Sent {} via netHandler: '{}'", category, responseText);
+                            netHandler.method_45729(textToSend);
+                            LOGGER.info("[HPKarma] Sent {} via netHandler: '{}'", category, textToSend);
+                        }
+
+                        // Update session counters
+                        if (category == EventCategory.WELCOME) {
+                            SESSION_WELCOMES.incrementAndGet();
+                        } else {
+                            SESSION_GGS.incrementAndGet();
+                        }
+
+                        // Subtle action-bar HUD feedback
+                        if (hudNotification && client.field_1724 != null) {
+                            try {
+                                String hudMsg = "§8[§5§lH§6§lP§e§lKarma \uE17E§8] §7Auto-responded: §e" + textToSend + " §a(+Karma)";
+                                client.field_1724.method_7353(net.minecraft.class_2561.method_30163(hudMsg), true);
+                            } catch (Throwable ignored) {}
                         }
                     } catch (Throwable sendErr) {
                         LOGGER.error("[HPKarma] Error sending packet to server", sendErr);
