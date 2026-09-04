@@ -158,32 +158,22 @@ public class HPKarmaMod implements ClientModInitializer {
                         return 1;
                     })
                 )
-                .then(ClientCommandManager.literal("randomize")
-                    .executes(context -> {
-                        ChatHandler.randomizePhrases = !ChatHandler.randomizePhrases;
-                        ConfigManager.save();
-                        context.getSource().sendFeedback(net.minecraft.class_2561.method_30163(
-                            PREFIX + "§7Phrase Randomization: " + (ChatHandler.randomizePhrases ? "§a✔" : "§c✖")
-                        ));
-                        return 1;
-                    })
-                )
-                .then(ClientCommandManager.literal("rand")
-                    .executes(context -> {
-                        ChatHandler.randomizePhrases = !ChatHandler.randomizePhrases;
-                        ConfigManager.save();
-                        context.getSource().sendFeedback(net.minecraft.class_2561.method_30163(
-                            PREFIX + "§7Phrase Randomization: " + (ChatHandler.randomizePhrases ? "§a✔" : "§c✖")
-                        ));
-                        return 1;
-                    })
-                )
                 .then(ClientCommandManager.literal("hud")
                     .executes(context -> {
                         ChatHandler.hudNotification = !ChatHandler.hudNotification;
                         ConfigManager.save();
                         context.getSource().sendFeedback(net.minecraft.class_2561.method_30163(
                             PREFIX + "§7Actionbar HUD feedback: " + (ChatHandler.hudNotification ? "§a✔" : "§c✖")
+                        ));
+                        return 1;
+                    })
+                )
+                .then(ClientCommandManager.literal("sound")
+                    .executes(context -> {
+                        ChatHandler.soundNotification = !ChatHandler.soundNotification;
+                        ConfigManager.save();
+                        context.getSource().sendFeedback(net.minecraft.class_2561.method_30163(
+                            PREFIX + "§7Audio chime feedback: " + (ChatHandler.soundNotification ? "§a✔" : "§c✖")
                         ));
                         return 1;
                     })
@@ -202,7 +192,7 @@ public class HPKarmaMod implements ClientModInitializer {
                     .executes(context -> {
                         int total = ChatHandler.SESSION_GGS.get() + ChatHandler.SESSION_WELCOMES.get();
                         context.getSource().sendFeedback(net.minecraft.class_2561.method_30163(
-                            PREFIX + "§7Session: §e" + ChatHandler.SESSION_GGS.get() + " §7GGs, §e" + ChatHandler.SESSION_WELCOMES.get() + " §7Welcomes §8(~§a" + (total * 10) + " §7Karma§8)"
+                            PREFIX + "§7Session: §e" + ChatHandler.SESSION_GGS.get() + " §7GGs, §e" + ChatHandler.SESSION_WELCOMES.get() + " §7Welcomes §8(§a" + (total * 25) + " §7Karma§8)"
                         ));
                         return 1;
                     })
@@ -387,8 +377,8 @@ public class HPKarmaMod implements ClientModInitializer {
             { " §e/hpk gg", "Toggle Rebirth & Karma GG" },
             { " §e/hpk welcome", "Toggle welcome for new joins" },
             { " §e/hpk serverlock", "Toggle Hallow Prison only lock" },
-            { " §e/hpk randomize", "Toggle phrase variations" },
             { " §e/hpk hud", "Toggle action-bar toast" },
+            { " §e/hpk sound", "Toggle audio chime feedback" },
             { " §e/hpk focus", "Toggle pause when tabbed out" },
             { " §e/hpk wavecooldown <sec>", "Wave lockout (15-180s)" },
             { " §e/hpk cooldown <sec>", "Safety spacing (4-60s)" },
@@ -439,8 +429,8 @@ public class HPKarmaMod implements ClientModInitializer {
             new StatusRow(" §6\u270F §7Milestone GG:",         ChatHandler.ggEnabled ? "§a✔" : "§c✖", "§8(§6Orange§8)", "/hpk gg", "§eClick to toggle Auto-GG", false),
             new StatusRow(" §6\u270F §7New Player Welcome:",    ChatHandler.welcomeEnabled ? "§a✔" : "§c✖", "§8(§aGreen§8)", "/hpk welcome", "§eClick to toggle Auto-Welcome", false),
             new StatusRow(" §6\u270F §7Hallow Prison Lock:",   ChatHandler.serverLock ? "§a✔" : "§c✖", "§8(§7Lock to HP§8)", "/hpk serverlock", "§eClick to toggle server lock", false),
-            new StatusRow(" §6\u270F §7Phrase Variation:",     ChatHandler.randomizePhrases ? "§a✔" : "§c✖", "§8(§7Anti-detection§8)", "/hpk randomize", "§eClick to toggle phrase randomization", false),
             new StatusRow(" §6\u270F §7HUD Notification:",     ChatHandler.hudNotification ? "§a✔" : "§c✖", "§8(§7Actionbar§8)", "/hpk hud", "§eClick to toggle HUD notices", false),
+            new StatusRow(" §6\u270F §7Audio Chime:",          ChatHandler.soundNotification ? "§a✔" : "§c✖", "§8(§7Orb chime§8)", "/hpk sound", "§eClick to toggle audio chime", false),
             new StatusRow(" §6\u270F §7Pause Tabbed Out:",     ChatHandler.pauseWhenUnfocused ? "§a✔" : "§c✖", "§8(§7Focus check§8)", "/hpk focus", "§eClick to toggle pause when tabbed out", false),
             new StatusRow(" §6\u270F §7Wave Lockout:",         "§e" + (ChatHandler.waveCooldownMs / 1000) + "s", "§8(§7Lockout§8)", "/hpk wavecooldown ", "§eClick to set wave lockout", true),
             new StatusRow(" §6\u270F §7Safety Throttle:",      "§e" + (ChatHandler.globalCooldownMs / 1000) + "s", "§8(§7Throttle§8)", "/hpk cooldown ", "§eClick to set safety throttle", true)
@@ -488,7 +478,7 @@ public class HPKarmaMod implements ClientModInitializer {
         int totalResponses = ChatHandler.SESSION_GGS.get() + ChatHandler.SESSION_WELCOMES.get();
         source.sendFeedback(net.minecraft.class_2561.method_30163(""));
         source.sendFeedback(net.minecraft.class_2561.method_30163(
-            " §6⚡ §7Session Stats: §e" + ChatHandler.SESSION_GGS.get() + " §7GGs, §e" + ChatHandler.SESSION_WELCOMES.get() + " §7Welcomes §8(~§a" + (totalResponses * 10) + " §7Karma§8)"
+            " §6⚡ §7Session Stats: §e" + ChatHandler.SESSION_GGS.get() + " §7GGs, §e" + ChatHandler.SESSION_WELCOMES.get() + " §7Welcomes §8(§a" + (totalResponses * 25) + " §7Karma§8)"
         ));
         source.sendFeedback(net.minecraft.class_2561.method_30163(divider));
     }

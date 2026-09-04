@@ -38,45 +38,77 @@ public class ChatHandler {
     public static volatile boolean ggEnabled = true;
     public static volatile boolean welcomeEnabled = true;
     public static volatile boolean serverLock = true;
-    public static volatile boolean randomizePhrases = true;
     public static volatile boolean pauseWhenUnfocused = false;
     public static volatile boolean hudNotification = true;
+    public static volatile boolean soundNotification = true;
 
     // Session stats tracking
     public static final java.util.concurrent.atomic.AtomicInteger SESSION_GGS = new java.util.concurrent.atomic.AtomicInteger(0);
     public static final java.util.concurrent.atomic.AtomicInteger SESSION_WELCOMES = new java.util.concurrent.atomic.AtomicInteger(0);
 
-    // Natural phrase pools for anti-detection
-    private static final String[] GG_POOL = {"gg", "GG", "ggs", "Gg", "gg!"};
-    private static final String[] WELCOME_POOL = {"welcome", "Welcome!", "welcome!", "wb", "Welcome"};
-
+    // Exact phrase responses required by Hallow Prison's karma plugin
     public static String getGgResponse() {
-        if (!randomizePhrases) return "gg";
-        return GG_POOL[RANDOM.nextInt(GG_POOL.length)];
+        return "gg";
     }
 
     public static String getWelcomeResponse() {
-        if (!randomizePhrases) return "welcome";
-        return WELCOME_POOL[RANDOM.nextInt(WELCOME_POOL.length)];
+        return "welcome";
     }
 
     /**
      * Checks whether the client is currently connected to Hallow Prison.
+     * Supports primary domains, server list entry names, and scoreboard objective titles (for numeric IPs).
      */
     public static boolean isHallowPrisonConnected() {
         try {
             net.minecraft.class_310 client = net.minecraft.class_310.method_1551();
             if (client == null) return false;
             if (client.method_1496()) return false; // Singleplayer integrated server
+
+            // 1. Direct Server Address & Server Entry Name Check
             net.minecraft.class_642 server = client.method_1558();
-            if (server == null) return false;
-            String address = server.field_3761;
-            if (address == null) return false;
-            String lower = address.toLowerCase();
-            return lower.contains("hallowprison.com") || lower.contains("hallowprison");
+            if (server != null) {
+                String address = server.field_3761;
+                if (address != null) {
+                    String lowerAddr = address.toLowerCase();
+                    if (lowerAddr.contains("hallowprison.com") || lowerAddr.contains("hallowprison") || lowerAddr.contains("hallow.gg")) {
+                        return true;
+                    }
+                }
+                String serverName = server.field_3752;
+                if (serverName != null) {
+                    String lowerName = serverName.toLowerCase();
+                    if (lowerName.contains("hallowprison") || lowerName.contains("hallow prison")) {
+                        return true;
+                    }
+                }
+            }
+
+            // 2. Scoreboard Sidebar & Objective Title Check (handles numeric IP or proxy connections)
+            if (client.field_1687 != null) {
+                net.minecraft.class_269 scoreboard = client.field_1687.method_8428();
+                if (scoreboard != null) {
+                    for (net.minecraft.class_266 objective : scoreboard.method_1151()) {
+                        if (objective != null) {
+                            net.minecraft.class_2561 displayName = objective.method_1114();
+                            if (displayName != null) {
+                                String title = displayName.getString().toLowerCase();
+                                if (title.contains("hallow prison") || title.contains("hallowprison")) {
+                                    return true;
+                                }
+                            }
+                            String objName = objective.method_1113();
+                            if (objName != null && (objName.toLowerCase().contains("hallowprison") || objName.toLowerCase().contains("hallow"))) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
         } catch (Throwable t) {
             return false;
         }
+        return false;
     }
 
     // Humanized reaction + typing delays (milliseconds)
@@ -371,8 +403,8 @@ public class ChatHandler {
                 }
             }
 
-            // 6. Styled text component traversal: inspects for colored 'gg', 'ggs', or green 'welcome'
-            if (text != null && (detectedGgCategory == null || !foundWelcome)) {
+            // 6. Styled text component traversal: inspects for colored 'gg', 'ggs', or green 'welcome' (server announcements only to prevent player baiting)
+            if (isServerAnnouncement && text != null && (detectedGgCategory == null || !foundWelcome)) {
                 final EventCategory[] compGgCat = new EventCategory[1];
                 final boolean[] compWelcome = new boolean[1];
 
@@ -487,6 +519,18 @@ public class ChatHandler {
                         if (pauseWhenUnfocused && !client.method_1569()) return;
                         if (client.field_1724 == null || client.field_1687 == null) return;
 
+                        // Container / HandledScreen Safety: Never chat while a chest, inventory, or shop GUI is open
+                        if (client.field_1755 instanceof net.minecraft.class_465) {
+                            LOGGER.debug("[HPKarma] HandledScreen (container/chest/GUI) is open; suppressing response for anti-cheat safety.");
+                            return;
+                        }
+
+                        // Death Safety: Suppress if player is dead, zero health, or on DeathScreen
+                        if (client.field_1724.method_29504() || client.field_1724.method_6032() <= 0 || client.field_1755 instanceof net.minecraft.class_418) {
+                            LOGGER.debug("[HPKarma] Player is dead or on DeathScreen; suppressing response.");
+                            return;
+                        }
+
                         net.minecraft.class_634 netHandler = client.method_1562();
                         if (netHandler == null) return;
 
@@ -552,8 +596,15 @@ public class ChatHandler {
                         // Subtle action-bar HUD feedback
                         if (hudNotification && client.field_1724 != null) {
                             try {
-                                String hudMsg = "§8[§5§lH§6§lP§e§lKarma \uE17E§8] §7Auto-responded: §e" + textToSend + " §a(+Karma)";
+                                String hudMsg = "§8[§5§lH§6§lP§e§lKarma \uE17E§8] §7Auto-responded: §e" + textToSend + " §a(+25 Karma)";
                                 client.field_1724.method_7353(net.minecraft.class_2561.method_30163(hudMsg), true);
+                            } catch (Throwable ignored) {}
+                        }
+
+                        // Subtle audio chime feedback
+                        if (soundNotification && client.field_1724 != null) {
+                            try {
+                                client.field_1724.method_5783(net.minecraft.class_3417.field_14627, 0.35F, 1.3F);
                             } catch (Throwable ignored) {}
                         }
                     } catch (Throwable sendErr) {

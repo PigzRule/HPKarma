@@ -68,9 +68,6 @@ public class ConfigManager {
             if (values.containsKey("serverLock")) {
                 ChatHandler.serverLock = Boolean.parseBoolean(values.get("serverLock"));
             }
-            if (values.containsKey("randomizePhrases")) {
-                ChatHandler.randomizePhrases = Boolean.parseBoolean(values.get("randomizePhrases"));
-            }
             if (values.containsKey("pauseWhenUnfocused")) {
                 ChatHandler.pauseWhenUnfocused = Boolean.parseBoolean(values.get("pauseWhenUnfocused"));
             }
@@ -122,7 +119,6 @@ public class ConfigManager {
                 writer.write("  \"ggEnabled\": " + ChatHandler.ggEnabled + ",\n");
                 writer.write("  \"welcomeEnabled\": " + ChatHandler.welcomeEnabled + ",\n");
                 writer.write("  \"serverLock\": " + ChatHandler.serverLock + ",\n");
-                writer.write("  \"randomizePhrases\": " + ChatHandler.randomizePhrases + ",\n");
                 writer.write("  \"pauseWhenUnfocused\": " + ChatHandler.pauseWhenUnfocused + ",\n");
                 writer.write("  \"hudNotification\": " + ChatHandler.hudNotification + ",\n");
                 writer.write("  \"soundNotification\": " + ChatHandler.soundNotification + ",\n");
