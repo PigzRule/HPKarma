@@ -136,7 +136,7 @@ public class ChatHandler {
     public static volatile int maxDelayWelcome = 4500;
 
     // Wave lockout (milliseconds)
-    public static volatile int waveCooldownMs = 45000;     // 45s lockout per category wave
+    public static volatile int waveCooldownMs = 5000;      // 5s lockout per category wave
     public static volatile int globalCooldownMs = 2500;    // 2.5s minimum spacing between consecutive packets
     public static volatile int triggerCooldownMs = 12000;  // Isolated trigger cooldown (ms)
     public static volatile int selfEventLockoutMs = 4000;  // 4s brief lockout after self-event (shortened so close subsequent events are not missed)
@@ -145,9 +145,9 @@ public class ChatHandler {
     private static final ConcurrentHashMap<EventCategory, Long> LAST_WAVE_SENT_BY_CATEGORY = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<EventCategory, Long> LAST_SELF_EVENT_BY_CATEGORY = new ConcurrentHashMap<>();
 
-    // Sequential queue slot tracking for natural multi-type stacking
     private static final AtomicLong NEXT_AVAILABLE_SEND_TIME = new AtomicLong(0);
     private static final AtomicLong LAST_ACTUAL_SENT_TIME = new AtomicLong(0);
+    private static volatile String cachedPlayerName = null;
 
     /**
      * Safely extract the profile name across Authlib versions (record name() vs legacy getName()).
@@ -183,13 +183,14 @@ public class ChatHandler {
      * ReDoS-safe, linear-time word boundary check (matches 'gg', 'gg!', '[gg]', but not 'nuggets').
      */
     public static boolean containsWord(String text, String word) {
-        if (text == null || word == null) return false;
+        if (text == null || word == null || word.isEmpty()) return false;
         String lower = text.toLowerCase();
+        String target = word.toLowerCase();
         int idx = 0;
-        int wordLen = word.length();
+        int wordLen = target.length();
         int totalLen = lower.length();
 
-        while ((idx = lower.indexOf(word, idx)) != -1) {
+        while ((idx = lower.indexOf(target, idx)) != -1) {
             boolean startOk = (idx == 0) || !Character.isLetterOrDigit(lower.charAt(idx - 1));
             int endIdx = idx + wordLen;
             boolean endOk = (endIdx == totalLen) || !Character.isLetterOrDigit(lower.charAt(endIdx));
@@ -455,10 +456,20 @@ public class ChatHandler {
                 if (client.method_1548() != null) {
                     myName = client.method_1548().method_1676();
                 }
-                if (myName == null && client.field_1724 != null) {
+                if ((myName == null || myName.isEmpty()) && client.field_1724 != null) {
+                    myName = client.field_1724.method_5820();
+                }
+                if ((myName == null || myName.isEmpty()) && client.field_1724 != null) {
                     myName = client.field_1724.method_5477().getString();
                 }
-            } catch (Throwable ignored) {}
+                if (myName != null && !myName.isEmpty()) {
+                    cachedPlayerName = myName;
+                } else {
+                    myName = cachedPlayerName;
+                }
+            } catch (Throwable ignored) {
+                if (myName == null) myName = cachedPlayerName;
+            }
 
             String fullString = (text != null) ? text.getString() : "";
             if (fullString == null || fullString.isEmpty()) {
@@ -549,7 +560,23 @@ public class ChatHandler {
 
             // 7. Self-Event Protection: If the announcement involves the local player,
             // suppress the auto-response AND apply a brief lockout so subsequent close messages from other players can still be congratulated!
-            if (myName != null && !myName.isEmpty() && containsWord(lowerFull, myName)) {
+            boolean isSelfAnnouncement = false;
+            if (myName != null && !myName.isEmpty()) {
+                if (containsWord(lowerFull, myName)) {
+                    isSelfAnnouncement = true;
+                } else {
+                    String lowerName = myName.toLowerCase();
+                    if (lowerFull.contains(" " + lowerName + " ") ||
+                        lowerFull.startsWith(lowerName + " ") ||
+                        lowerFull.contains(" " + lowerName + ",") ||
+                        lowerFull.contains(" " + lowerName + "!") ||
+                        lowerFull.contains("[" + lowerName + "]")) {
+                        isSelfAnnouncement = true;
+                    }
+                }
+            }
+
+            if (isSelfAnnouncement) {
                 if (detectedGgCategory != null || foundWelcome) {
                     LOGGER.info("[HPKarma] Announcement involves local player ('{}'); suppressing auto-response and applying brief {}s lockout.",
                             myName, selfEventLockoutMs / 1000);
@@ -688,45 +715,43 @@ public class ChatHandler {
     private static void dispatchDirect(net.minecraft.class_310 client, EventCategory category, Object initialConn, long triggerTimestamp, boolean onRenderThread) {
         try {
             if (!enabled) {
+                LAST_WAVE_SENT_BY_CATEGORY.remove(category);
                 LOGGER.info("[HPKarma] Suppressed response for {}: Master switch is disabled", category);
                 return;
             }
             if (serverLock && !isHallowPrisonConnected()) {
+                LAST_WAVE_SENT_BY_CATEGORY.remove(category);
                 LOGGER.info("[HPKarma] Suppressed response for {}: Not connected to Hallow Prison (serverLock ON)", category);
                 return;
             }
             if (client.field_1724 == null || client.field_1687 == null) {
+                LAST_WAVE_SENT_BY_CATEGORY.remove(category);
                 LOGGER.info("[HPKarma] Suppressed response for {}: Player or world is null", category);
-                return;
-            }
-
-            // Container / HandledScreen Safety:
-            // Allow player survival inventory (InventoryScreen / class_490) so pressing 'E' to unlock cursor does not cancel responses.
-            // Suppress if an external container GUI (chest, crate, shop GUI) is open.
-            if (client.field_1755 instanceof net.minecraft.class_465 && !(client.field_1755 instanceof net.minecraft.class_490)) {
-                LOGGER.info("[HPKarma] Suppressed response for {}: External container/GUI ({}) is open",
-                        category, client.field_1755.getClass().getSimpleName());
                 return;
             }
 
             // Death Safety: Suppress if player is dead, zero health, or on DeathScreen
             if (client.field_1724.method_29504() || client.field_1724.method_6032() <= 0 || client.field_1755 instanceof net.minecraft.class_418) {
+                LAST_WAVE_SENT_BY_CATEGORY.remove(category);
                 LOGGER.info("[HPKarma] Suppressed response for {}: Player is dead or on DeathScreen", category);
                 return;
             }
 
             net.minecraft.class_634 netHandler = client.method_1562();
             if (netHandler == null) {
+                LAST_WAVE_SENT_BY_CATEGORY.remove(category);
                 LOGGER.info("[HPKarma] Suppressed response for {}: netHandler is null", category);
                 return;
             }
 
             Object conn = netHandler.method_48296();
             if (initialConn != null && conn != initialConn) {
+                LAST_WAVE_SENT_BY_CATEGORY.remove(category);
                 LOGGER.info("[HPKarma] Suppressed response for {}: Connection changed since trigger", category);
                 return;
             }
             if (!isConnectionOpen(conn)) {
+                LAST_WAVE_SENT_BY_CATEGORY.remove(category);
                 LOGGER.info("[HPKarma] Suppressed response for {}: Connection is closed", category);
                 return;
             }
@@ -734,6 +759,7 @@ public class ChatHandler {
             // Stale check at dispatch time
             long dispatchElapsed = System.currentTimeMillis() - triggerTimestamp;
             if (dispatchElapsed > 9000) {
+                LAST_WAVE_SENT_BY_CATEGORY.remove(category);
                 LOGGER.info("[HPKarma] Dropped response for {} at dispatch (TTL 9s exceeded: {}ms elapsed)", category, dispatchElapsed);
                 return;
             }

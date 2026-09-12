@@ -64,7 +64,7 @@ public class ConfigManager {
             ChatHandler.hudNotification = parseBoolOrDefault(values, "hudNotification", ChatHandler.hudNotification);
             ChatHandler.soundNotification = parseBoolOrDefault(values, "soundNotification", ChatHandler.soundNotification);
 
-            ChatHandler.waveCooldownMs = parseIntOrDefault(values, "waveCooldownMs", ChatHandler.waveCooldownMs, 10000);
+            ChatHandler.waveCooldownMs = parseIntOrDefault(values, "waveCooldownMs", ChatHandler.waveCooldownMs, 0);
             ChatHandler.globalCooldownMs = parseIntOrDefault(values, "globalCooldownMs", ChatHandler.globalCooldownMs, 1000);
             ChatHandler.triggerCooldownMs = parseIntOrDefault(values, "triggerCooldownMs", ChatHandler.triggerCooldownMs, 4000);
             ChatHandler.selfEventLockoutMs = parseIntOrDefault(values, "selfEventLockoutMs", ChatHandler.selfEventLockoutMs, 0);

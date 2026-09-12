@@ -119,7 +119,7 @@ public class HPKarmaMod implements ClientModInitializer {
                         ));
                         return 1;
                     })
-                    .then(ClientCommandManager.argument("seconds", IntegerArgumentType.integer(15, 180))
+                    .then(ClientCommandManager.argument("seconds", IntegerArgumentType.integer(0, 180))
                         .executes(context -> {
                             int sec = IntegerArgumentType.getInteger(context, "seconds");
                             ChatHandler.waveCooldownMs = sec * 1000;
@@ -474,7 +474,7 @@ public class HPKarmaMod implements ClientModInitializer {
             { " §e/hpk hud", "Toggle action-bar toast" },
             { " §e/hpk sound", "Toggle audio chime feedback" },
             { " §e/hpk focus", "Toggle pause when tabbed out" },
-            { " §e/hpk wavecooldown <sec>", "Wave lockout (15-180s)" },
+            { " §e/hpk wavecooldown <sec>", "Wave lockout (0-180s)" },
             { " §e/hpk cooldown <sec>", "Safety spacing (4-60s)" },
             { " §e/hpk selflockout <sec>", "Self-rebirth lockout (0-60s)" },
             { " §e/hpk stats", "Show session stats" },
