@@ -1,6 +1,6 @@
 # HPKarma
 
-A lightweight Fabric mod for Hallow Prison (Minecraft 1.21.11) that automatically responds to karma triggers (`gg` and `welcome`).
+A lightweight Fabric mod for Hallow Prison in multiple versions (1.21.11 & 26.2 currently) that automatically responds to karma triggers (`gg` and `welcome`).
 
 ## Features
 
