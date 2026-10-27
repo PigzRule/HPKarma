@@ -17,25 +17,9 @@ HPKarma is a client-side Fabric mod for Hallow Prison on Minecraft 26.3 and newe
 - Java 25+
 - Fabric API modules included in your Minecraft profile
 
-## Build
-
-Use a Minecraft 26.3 profile that has launched at least once, plus the matching Modrinth metadata and Java 25 runtime. From PowerShell:
-
-```powershell
-./build.ps1 -ProfilePath "$env:APPDATA/ModrinthApp/profiles/Fabulously Optimized (1)" -MetaPath "$env:APPDATA/ModrinthApp/meta" -JdkBin "C:/path/to/java-25/bin"
-```
-
-The script compiles the source and writes `build/libs/hp-karma-1.0.0-mc26.3.jar` and its SHA-256 checksum. It does not install the mod into a profile.
-
 ## Install
 
 Copy `hp-karma-1.0.0-mc26.3.jar` into the Minecraft profile's `mods` folder.
-
-## Karma perks
-
-Good Manners increases GG and welcome Karma from 25 to as much as 40 per response. First Ballot and Rallying Cry increase Vote Karma. The AFK tree currently has no Karma bonuses. HPKarma scans perk menus when they are open and persists the detected levels in `config/hp-karma.json`.
-
-The server does not provide perk levels in its join message, so a fresh config cannot infer them from connecting alone. Open the Vote Perks menu once to sync them. The source reference for the tree data is in `docs/perk-tree-reference.json`.
 
 ## License
 
